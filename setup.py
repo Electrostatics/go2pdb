@@ -10,7 +10,7 @@ setuptools.setup(
     ),
     python_requires=">=3.8",
     author="Nathan Baker",
-    author_email="nathan.baker@pnnl.com",
+    author_email="nathan.baker@pnnl.gov",
     packages=setuptools.find_packages(),
     # package_data={"": ["./config.ini"]},
     install_requires=["requests", "biopython", "pandas", "openpyxl", "numpy", "mmcif_pdbx"],
