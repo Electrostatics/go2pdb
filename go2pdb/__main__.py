@@ -1,11 +1,12 @@
 """Process PDB entries with specific Gene Ontology annotations."""
+import tempfile
 from go2pdb.go import uniprot
 import logging
 import argparse
 from pathlib import Path
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 import pandas as pd
 import numpy as np
-import pdbx
 from . import pdb, blast
 from .go import goa
 
@@ -16,7 +17,6 @@ BLAST_CUTOFF = 0.9
 DATA_DIR = Path("data")
 GOA_PATH = DATA_DIR / Path("goa_pdb.gaf.gz")
 SEARCH_OUTPUT = Path("search-output.xlsx")
-FETCH_OUTPUT = Path("fetch-output.xlsx")
 BLAST_OUTPUT = Path("blast-output.xlsx")
 CLUSTER_OUTPUT = Path("cluster-output.xlsx")
 
@@ -29,7 +29,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--broken-ssl",
-        help="Use this flag if your IT department installs a self-signed certificate on the firewall without telling anyone.",
+        help=(
+            "Use this flag if your IT department installs a self-signed "
+            "certificate on the firewall without telling anyone."
+        ),
         action="store_false",
         dest="working_ssl",
     )
@@ -58,7 +61,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_parser.add_argument(
         "--pdb-keyword",
-        help="Option keyword to search against PDB database in case you do not trust the GO annotations",
+        help=(
+            "Option keyword to search against PDB database in case you do "
+            "not trust the completeness of GO annotations"
+        ),
     )
     search_parser.add_argument(
         "--output-path",
@@ -68,26 +74,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     search_parser.add_argument(
         "go_codes",
-        help="GO codes to search (e.g., GO:0090729 or GO:0031640). Search terms are combined with logical OR operation.",
+        help=(
+            "GO codes to search (e.g., GO:0016151). Multiple codes can be "
+            "provided. Search terms are combined with logical OR operation."
+        ),
         nargs="+",
-    )
-    fetch_parser = subparsers.add_parser(
-        "fetch",
-        help="Fetch information about PDB entries.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    fetch_parser.add_argument("--do-fetch", help=argparse.SUPPRESS)
-    fetch_parser.add_argument(
-        "--input-path",
-        help="Path to Excel-format search output.",
-        dest="fetch_input_path",
-        default=SEARCH_OUTPUT,
-    )
-    fetch_parser.add_argument(
-        "--output-path",
-        help="Path for Excel-format fetch output.",
-        dest="fetch_output_path",
-        default=FETCH_OUTPUT,
     )
     blast_parser = subparsers.add_parser(
         "blast",
@@ -97,9 +88,9 @@ def build_parser() -> argparse.ArgumentParser:
     blast_parser.add_argument("--do-blast", help=argparse.SUPPRESS)
     blast_parser.add_argument(
         "--input-path",
-        help="Path to Excel-format fetch output.",
+        help="Path to Excel-format search output.",
         dest="blast_input_path",
-        default=FETCH_OUTPUT,
+        default=SEARCH_OUTPUT,
     )
     blast_parser.add_argument(
         "--output-path",
@@ -108,8 +99,21 @@ def build_parser() -> argparse.ArgumentParser:
         default=BLAST_OUTPUT,
     )
     blast_parser.add_argument(
+        "--fasta-path",
+        help="Save FASTA file to this path (rather than a temporary file)."
+    )
+    blast_parser.add_argument(
+        "--db-dir",
+        help=(
+            "Save BLAST database files to this directory (rather than a "
+            " temporary directory)."
+        ),
+        dest="blast_db_dir"
+    )
+    blast_parser.add_argument(
         "--raw-output",
         help="Save raw BLAST XML-format to this path, if specified.",
+        dest="blast_raw_output",
         nargs=1,
     )
     cluster_parser = subparsers.add_parser(
@@ -139,7 +143,35 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def search(args):
+def do_blast(args):
+    """Perform BLAST all-vs.-all comparison.
+
+    :param argparse.Namespace args:  command-line arguments
+    """
+    _LOGGER.info(f"Reading search output from {args.blast_input_path}.")
+    search_df = pd.read_excel(args.blast_input_path)
+    fasta = blast.build_fasta(search_df)
+    temp_dir = TemporaryDirectory()
+    if args.fasta_path is not None:
+        fasta_path = args.fasta_path
+    else:
+        fasta_path = Path(temp_dir.name) / Path("sequences.fasta")
+    _LOGGER.info(f"Writing sequence data to {fasta_path}.")
+    with open(fasta_path, "wt") as fasta_file:
+        fasta_file.write(fasta)
+    if args.blast_db_dir is not None:
+        blast_dir = Path(args.blast_db_dir)
+    else:
+        blast_dir = Path(temp_dir.name)
+    _LOGGER.info(f"Building BLAST database in {blast_dir}.")
+    blast.build_db(fasta_path, blast_dir)
+    raise NotImplementedError(args.blast_db_dir)
+    raise NotImplementedError(args.blast_raw_output)
+    raise NotImplementedError(args.blast_output_path)
+    temp_dir.cleanup()
+
+
+def do_search(args):
     """Perform search.
 
     :param argparse.Namespace args:  command-line arguments
@@ -181,6 +213,9 @@ def search(args):
             "PDB description",
             "PDB title",
             "PDB keyword",
+            "PDB deposit date",
+            "PDB method",
+            "PDB resolution (A)",
             "GOA qualifiers",
             "GOA GO code",
             "GOA DB reference",
@@ -196,6 +231,7 @@ def search(args):
             "PDB strand sequence",
         ]
     ]
+    df = df.drop_duplicates()
     _LOGGER.info(f"Have {len(df)} entries.")
     _LOGGER.info(f"Writing results to {args.search_output_path}.")
     df.to_excel(args.search_output_path, index=False)
@@ -214,11 +250,9 @@ def main(args=None):
     logging.basicConfig(level=getattr(logging, args.log_level, "INFO"))
     _LOGGER.debug(f"Got arguments: {args}.")
     if hasattr(args, "do_search"):
-        search(args)
-    elif hasattr(args, "do_fetch"):
-        raise NotImplementedError("fetch")
+        do_search(args)
     elif hasattr(args, "do_blast"):
-        raise NotImplementedError("blast")
+        do_blast(args)
     elif hasattr(args, "do_cluster"):
         raise NotImplementedError("cluster")
     else:

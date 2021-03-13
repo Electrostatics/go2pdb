@@ -2,45 +2,29 @@
 
 This code retrieves [Protein DataBank](https://www.rcsb.org/) protein structure entries for proteins that have been annotated in the [Gene Ontology Annotation database](https://www.ebi.ac.uk/GOA/) with specific [Gene Ontology](http://geneontology.org/) codes.
 This index is updated approximately every 4 weeks and can be [downloaded via FTP](ftp://ftp.ebi.ac.uk/pub/databases/GO/goa/PDB/).
+However, the database appears to have holes in it, so this code also searches UniProt for entries with matching GO codes that also have PDB structures.
 
 ## Example use
 
-For example, suppose we wanted to find the structures of all "toxic proteins".
-We will define this set of proteins as those gene products that have the Gene Ontology annotation [GO:0090729 "toxin activity"](http://www.informatics.jax.org/vocab/gene_ontology/GO:0090729).
+For example, suppose we wanted to find the structures of all "nickel-binding proteins".
+We will define this set of proteins as those gene products that have the Gene Ontology annotation [GO:0016151 "nickel cation binding"](https://www.ebi.ac.uk/QuickGO/term/GO:0016151).
+However, if we're not completely sure that this GO code covers all relevant proteins, we can also add a PDB keyword search (e.g., for "nickel").
 
-After installation (see below), the code can be run with
+After installation (see below), the search for matching structures can be run with
 ```
-python -m pipeline
+python -m go2pdb search --pdb-keyword NICKEL --search-goa GO:0016151
 ```
-
-which executes the following sequence of steps:
-
-1. Download an updated copy of ftp://ftp.ebi.ac.uk/pub/databases/GO/goa/PDB/goa_pdb.gaf.gz.
-2. This is a tab-delimited file with the following columns of interest:  `(2)` PDB ID, `(4)` qualifier on annotation, `(5)` GO annotation.  We want to extract column `(2)` for all entries where `(5)` is "GO:0090729" and `(4)` is not `NOT`.
-3. Retrieve the protein structure from (for example) https://files.rcsb.org/download/1FAS.pdb and the protein sequence from (for example) https://www.rcsb.org/fasta/entry/1FAS.
-4. Aggregate all of the FASTA sequences into a single file `all-toxins.fasta`.
-If searches have already been performed for some sequences, you may want to create a second file `new-toxins.fasta` that contains only the sequences that haven't been searched.
-5. Compile `toxins.fasta` into a BLAST database with
-```
-makeblastdb -in toxins.fasta -dbtype prot -out toxins_db
-```
-6. Search for sequence matches (`##` should be set to your target expectation value cutoff; probably 0):
-```
-blastp -db toxins_db -query new-toxins.fasta -max_hsps 1 -evalue ## -outfmt 5 -out output.xml
-```
-7. Use [BioPython](http://biopython.org/DIST/docs/tutorial/Tutorial.html#sec125) to parse the BLAST output.
-8. Generate and store clusters of sequences based on sequence similarity.
-
-The results are stored in `results.xlsx`.
+The `--search-goa` option adds search results from GOA.
+Even though GOA appears to be incomplete, it provides useful additional information in its results (when present).
 
 More information about the code use can be obtained by running
 ```
-python -m pipeline --help
+python -m go2pdb --help
 ```
 
 ## Installation and dependencies
 
-After creating and activating a virtual environment (e.g., with conda or virtualenv), you can install the code and most of its dependencies by running
+After creating and activating a virtual environment (e.g., with `conda create` or `virtualenv`), you can install the code and most of its dependencies by running
 ```
 pip install .
 ```
