@@ -1,12 +1,12 @@
 """Routines for fetching things from the PDB website."""
 import logging
+import json
+from os import access
 from pathlib import Path
-from io import StringIO
 from datetime import date
 import requests
 import pandas as pd
-import pdbx
-from Bio import SeqIO
+
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -14,142 +14,118 @@ SUMMARY_FILE = "summary.xlsx"
 PDB_FASTA_URL = "https://www.rcsb.org/fasta/entry/{pdb_id}"
 PDB_PDB_URL = "https://files.rcsb.org/download/{pdb_id}.pdb"
 PDB_CIF_URL = "https://files.rcsb.org/download/{pdb_id}.cif"
+PDB_SEARCH_URL = "https://search.rcsb.org/rcsbsearch/v1/query?json={query}"
+CHUNK_SIZE = 180
+GRAPHQL_URL = "https://data.rcsb.org/graphql"
+GRAPHQL_QUERY = (
+    "{{"
+    "  entries(entry_ids: {pdb_ids}) {{"
+    "    rcsb_id"
+    "    rcsb_accession_info {{ deposit_date }}"
+    "    struct {{ title pdbx_descriptor }}"
+    "    exptl {{ method }}"
+    "    refine {{ ls_d_res_high }}"
+    "    polymer_entities {{"
+    "      rcsb_id"
+    "      entity_poly {{"
+    "        pdbx_strand_id"
+    "        rcsb_entity_polymer_type"
+    "        pdbx_seq_one_letter_code_can"
+    "      }}"
+    "      uniprots {{ rcsb_id }}"
+    "    }}"
+    "  }}"
+    "}}"
+)
 
 
-def pdb_check_fetch(pdb_ids, dir, url_fmt=PDB_PDB_URL):
-    """Check to see if a PDB file exists and fetch it if it doesn't.
 
-    :param list pdb_ids:  list of PDB IDs to check/fetch
-    :param str dir:  path to directory where files will reside
-    :param str url_fmt:  format-string for URL
+def keyword_search(keyword, ssl_verify) -> pd.DataFrame:
+    """Perform a keyword search of the PDB.
+
+    :param str keyword:  keyword to search
+    :param bool ssl_verify:  does SSL work?
+    :returns:  matching PDB IDs
     """
-    for pdb_id in pdb_ids:
-        pdb_id = pdb_id.upper()
-        pdb_id, _ = pdb_id.split("_")
-        _LOGGER.debug(f"Checking/fetching {pdb_id}.")
-        path = Path(dir) / Path(f"{pdb_id}.pdb")
-        if not path.exists():
-            pdb_url = url_fmt.format(pdb_id=pdb_id)
-            _LOGGER.info(f"Fetching {pdb_url}.")
-            with requests.get(pdb_url) as req:
-                with open(path, "wt") as pdb_file:
-                    pdb_file.write(req.text)
+    pdb_ids = set()
+    for key in (keyword, keyword.upper(), keyword.lower()):
+        for field in ("struct_keywords.text", "struct_keywords.pdbx_keywords"):
+            query = {
+                "query": {
+                    "type": "terminal",
+                    "service": "text",
+                    "parameters": {
+                        "attribute": field,
+                        "operator": "contains_words",
+                        "value": key
+                    }
+                },
+                "request_options": {
+                    "return_all_hits": True
+                },
+                "return_type": "entry"
+            }
+            search_url = PDB_SEARCH_URL.format(query=json.dumps(query))
+            req = requests.get(search_url, verify=ssl_verify)
+            req_dict = req.json()
+            for result in req_dict["result_set"]:
+                pdb_id = result["identifier"].upper()
+                pdb_ids.add(pdb_id)
+    df = pd.DataFrame(data=list(pdb_ids), columns=["PDB ID"])
+    df["PDB keyword"] = keyword
+    return df
 
 
-def cif_check_fetch(pdb_ids, dir, url_fmt=PDB_CIF_URL):
-    """Check to see if a CIF file exists and fetch it if it doesn't.
+def metadata(pdb_ids, ssl_verify) -> pd.DataFrame:
+    """Get metadata for PDB IDs.
 
-    :param list pdb_ids:  list of PDB IDs to check/fetch
-    :param str dir:  path to directory where files will reside
-    :param str url_fmt:  format-string for URL
+    :param list pdb_ids:  list of PDB IDs
+    :param bool ssl_verify:  does SSL work?
+    :returns:  DataFrame with metadata
     """
-    for pdb_id in pdb_ids:
-        pdb_id = pdb_id.upper()
-        pdb_id, _ = pdb_id.split("_")
-        _LOGGER.debug(f"Checking/fetching {pdb_id}.")
-        path = Path(dir) / Path(f"{pdb_id}.cif")
-        if not path.exists():
-            pdb_url = url_fmt.format(pdb_id=pdb_id)
-            _LOGGER.info(f"Fetching {pdb_url}.")
-            with requests.get(pdb_url) as req:
-                with open(path, "wt") as pdb_file:
-                    pdb_file.write(req.text)
-
-
-def fasta_check_fetch(pdb_ids, dir, url_fmt=PDB_FASTA_URL):
-    """Check to see if FASTA files exist and fetch them if they don't.
-
-    :param list pdb_ids:  list of PDB IDs to check/fetch
-    :param str dir:  path to directory where files will reside
-    :param str url_fmt:  format-string for URL
-    """
-    for pdb_id in pdb_ids:
-        pdb_id = pdb_id.upper()
-        pdb_id, chain_id = pdb_id.split("_")
-        chain_id = chain_id.upper()
-        _LOGGER.debug(f"Checking/fetching {pdb_id}.")
-        path = Path(dir) / Path(f"{pdb_id}_{chain_id}.fasta")
-        if not path.exists():
-            pdb_url = url_fmt.format(pdb_id=pdb_id)
-            _LOGGER.info(f"Fetching {pdb_url}.")
-            with requests.get(pdb_url) as req:
-                with open(path, "wt") as pdb_file:
-                    fasta_text = req.text
-            with StringIO(fasta_text) as fasta_file:
-                records = list(SeqIO.parse(fasta_file, "fasta"))
-            chain_record = None
-            for record in records:
-                words = record.description.split("|")
-                chain_text = words[1]
-                if "Chains" in chain_text:
-                    _, chain_list = chain_text.split()
-                    chain_list = [c.upper() for c in chain_list.split(",")]
-                    if chain_id in chain_list:
-                        chain_record = record
-                        break
-                elif "Chain" in chain_text:
-                    _, test_chain = chain_text.split()
-                    if test_chain.upper() == chain_id:
-                        chain_record = record
-                        break
-                else:
-                    err = f"Don't know how to parse description {record.description}."
-                    raise ValueError(err)
-            if chain_record is not None:
-                SeqIO.write([chain_record], path, "fasta")
-            else:
-                descriptions = [rec.description for rec in records]
-                err = f"Unable to find chain {chain_id} in FASTA with descriptions {descriptions}."
-                raise ValueError(err)
-
-
-def summarize_cif(pdb_ids, cif_dir, summary_file=SUMMARY_FILE):
-    """Summarize information in CIF files for the specified PDBs and write to
-    Excel file.
-
-    :param set pdb_ids:  list of PDB IDs to summarize
-    :param str cif_dir:  path to directory of CIF file
-    :param str summary_file:  name of summary Excel file in CIF directory
-    """
-    cif_dir = Path(cif_dir)
-    df_path = cif_dir / Path(summary_file)
-    if df_path.exists():
-        df = pd.read_excel(df_path)
-        pdb_col = df["PDB ID"]
-        _LOGGER.info(f"Got {df.shape} CIF summary DataFrame from {df_path}.")
-    else:
-        df = None
-        pdb_col = pd.Series()
-        _LOGGER.info("Creating new CIF summary DataFrame.")
+    pdb_ids = sorted(list(pdb_ids))
     rows = []
-    _LOGGER.info("Checking for missing CIF data.")
-    pdb_ids = {pdb_id.upper().split("_")[0] for pdb_id in pdb_ids}
-    for pdb_id in sorted(list(pdb_ids)):
-        pdb_id = pdb_id.upper().split("_")[0]
-        if pdb_id not in pdb_col:
-            cif_path = cif_dir / Path(f"{pdb_id}.cif")
-            with open(cif_path, "rt") as cif_file:
-                container = pdbx.load(cif_file)[0]
-            dep_date = container.get_object("pdbx_database_status").get_value("recvd_initial_deposition_date")
-            words = dep_date.split("-")
-            dep_date = date(int(words[0]), int(words[1]), int(words[2]))
-            title = container.get_object("struct").get_value("title")
-            method = container.get_object("exptl").get_value("method")
-            try:
-                resolution = container.get_object("refine").get_value("ls_d_res_high")
-            except AttributeError:
+    for id_list in [pdb_ids[i:i+CHUNK_SIZE] for i in range(0, len(pdb_ids), CHUNK_SIZE)]:
+        _LOGGER.debug(f"Fetching metadata for {id_list}.")
+        query = GRAPHQL_QUERY.format(pdb_ids=id_list)
+        query = query.replace("'", '"')
+        req = requests.get(GRAPHQL_URL, params={"query": query}, verify=ssl_verify)
+        results = req.json()
+        for result in results["data"]["entries"]:
+            pdb_id = result.pop("rcsb_id")
+            struct = result.pop("struct")
+            descriptor = struct.pop("pdbx_descriptor")
+            accession = result.pop("rcsb_accession_info")
+            dep_date = accession.pop("deposit_date")
+            dep_date, _ = dep_date.split("T")
+            dep_date = date.fromisoformat(dep_date)
+            title = struct.pop("title")
+            experiments = result.pop("exptl")
+            if len(experiments) > 1:
+                _LOGGER.warning(f"Only using first experiment of {pdb_id} for annotation.")
+            experiment = experiments[0]
+            method = experiment.pop("method")
+            refinements = result.pop("refine")
+            if refinements is not None:
+                if len(refinements) > 1:
+                    _LOGGER.warning(f"Only using first refinement of {pdb_id} for annotation.")
+                refinement = refinements[0]
+                resolution = refinement.pop("ls_d_res_high")
+            else:
                 resolution = None
-            row = {"PDB ID": pdb_id}
-            row["Dep date"] = dep_date
-            row["Title"] = title
-            row["Experimental method"] = method
-            row["Resolution (A)"] = resolution
-            rows.append(row)
-            _LOGGER.debug(f"Got CIF data for {pdb_id}.")
-    new_df = pd.DataFrame(rows)
-    if df is not None:
-        df = df.append(new_df, ignore_index=True)
-    else:
-        df = new_df
-    _LOGGER.info(f"Writing {df.shape} CIF summary DataFrame to {df_path}.")
-    df.to_excel(df_path, index=False)
+            for polymer in result.pop("polymer_entities"):
+                chain_id = polymer.pop("rcsb_id")
+                entity = polymer.pop("entity_poly")
+                strand_ids = entity.pop("pdbx_strand_id")
+                strand_type = entity.pop("rcsb_entity_polymer_type")
+                sequence = entity.pop("pdbx_seq_one_letter_code_can")
+                uniprots = polymer.pop("uniprots")
+                if uniprots is not None:
+                    if len(uniprots) > 1:
+                        _LOGGER.warning(f"Only using first UniProt ID of {pdb_id} for annotation")
+                    uniprot = uniprots[0].pop("rcsb_id")
+                else:
+                    uniprot = None
+                row = {"PDB ID": pdb_id, "PDB deposit date": dep_date, "PDB method": method, "PDB resolution (A)": resolution, "PDB description": descriptor, "PDB title": title, "PDB chain ID": chain_id, "PDB strand ID(s)": strand_ids, "PDB strand type": strand_type, "PDB strand sequence": sequence, "PDB strand UniProt": uniprot}
+                rows.append(row)
+    return pd.DataFrame(rows)

@@ -10,7 +10,6 @@ from Bio import SeqIO
 from Bio.Blast import NCBIXML
 import pandas as pd
 import numpy as np
-from . import BLAST_DIR, FASTA_DIR
 
 
 _LOGGER = logging.getLogger(__name__)
