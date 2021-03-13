@@ -8,7 +8,6 @@ import requests
 import pandas as pd
 
 
-
 _LOGGER = logging.getLogger(__name__)
 SUMMARY_FILE = "summary.xlsx"
 PDB_FASTA_URL = "https://www.rcsb.org/fasta/entry/{pdb_id}"
@@ -39,7 +38,6 @@ GRAPHQL_QUERY = (
 )
 
 
-
 def keyword_search(keyword, ssl_verify) -> pd.DataFrame:
     """Perform a keyword search of the PDB.
 
@@ -57,13 +55,11 @@ def keyword_search(keyword, ssl_verify) -> pd.DataFrame:
                     "parameters": {
                         "attribute": field,
                         "operator": "contains_words",
-                        "value": key
-                    }
+                        "value": key,
+                    },
                 },
-                "request_options": {
-                    "return_all_hits": True
-                },
-                "return_type": "entry"
+                "request_options": {"return_all_hits": True},
+                "return_type": "entry",
             }
             search_url = PDB_SEARCH_URL.format(query=json.dumps(query))
             req = requests.get(search_url, verify=ssl_verify)
@@ -85,11 +81,15 @@ def metadata(pdb_ids, ssl_verify) -> pd.DataFrame:
     """
     pdb_ids = sorted(list(pdb_ids))
     rows = []
-    for id_list in [pdb_ids[i:i+CHUNK_SIZE] for i in range(0, len(pdb_ids), CHUNK_SIZE)]:
+    for id_list in [
+        pdb_ids[i : i + CHUNK_SIZE] for i in range(0, len(pdb_ids), CHUNK_SIZE)
+    ]:
         _LOGGER.debug(f"Fetching metadata for {id_list}.")
         query = GRAPHQL_QUERY.format(pdb_ids=id_list)
         query = query.replace("'", '"')
-        req = requests.get(GRAPHQL_URL, params={"query": query}, verify=ssl_verify)
+        req = requests.get(
+            GRAPHQL_URL, params={"query": query}, verify=ssl_verify
+        )
         results = req.json()
         for result in results["data"]["entries"]:
             pdb_id = result.pop("rcsb_id")
@@ -102,13 +102,17 @@ def metadata(pdb_ids, ssl_verify) -> pd.DataFrame:
             title = struct.pop("title")
             experiments = result.pop("exptl")
             if len(experiments) > 1:
-                _LOGGER.warning(f"Only using first experiment of {pdb_id} for annotation.")
+                _LOGGER.warning(
+                    f"Only using first experiment of {pdb_id} for annotation."
+                )
             experiment = experiments[0]
             method = experiment.pop("method")
             refinements = result.pop("refine")
             if refinements is not None:
                 if len(refinements) > 1:
-                    _LOGGER.warning(f"Only using first refinement of {pdb_id} for annotation.")
+                    _LOGGER.warning(
+                        f"Only using first refinement of {pdb_id} for annotation."
+                    )
                 refinement = refinements[0]
                 resolution = refinement.pop("ls_d_res_high")
             else:
@@ -122,10 +126,24 @@ def metadata(pdb_ids, ssl_verify) -> pd.DataFrame:
                 uniprots = polymer.pop("uniprots")
                 if uniprots is not None:
                     if len(uniprots) > 1:
-                        _LOGGER.warning(f"Only using first UniProt ID of {pdb_id} for annotation")
+                        _LOGGER.warning(
+                            f"Only using first UniProt ID of {pdb_id} for annotation"
+                        )
                     uniprot = uniprots[0].pop("rcsb_id")
                 else:
                     uniprot = None
-                row = {"PDB ID": pdb_id, "PDB deposit date": dep_date, "PDB method": method, "PDB resolution (A)": resolution, "PDB description": descriptor, "PDB title": title, "PDB chain ID": chain_id, "PDB strand ID(s)": strand_ids, "PDB strand type": strand_type, "PDB strand sequence": sequence, "PDB strand UniProt": uniprot}
+                row = {
+                    "PDB ID": pdb_id,
+                    "PDB deposit date": dep_date,
+                    "PDB method": method,
+                    "PDB resolution (A)": resolution,
+                    "PDB description": descriptor,
+                    "PDB title": title,
+                    "PDB chain ID": chain_id,
+                    "PDB strand ID(s)": strand_ids,
+                    "PDB strand type": strand_type,
+                    "PDB strand sequence": sequence,
+                    "PDB strand UniProt": uniprot,
+                }
                 rows.append(row)
     return pd.DataFrame(rows)

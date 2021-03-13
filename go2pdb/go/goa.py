@@ -137,7 +137,13 @@ def extract(local_path, go_codes) -> pd.DataFrame:
                     rows.append(words)
     df = pd.DataFrame(rows, columns=GOA_COLUMNS)
     df = df.drop(
-        ["DB", "DB_Object_Symbol", "DB_Object_Name", "Synonym", "DB_Object_Type"],
+        [
+            "DB",
+            "DB_Object_Symbol",
+            "DB_Object_Name",
+            "Synonym",
+            "DB_Object_Type",
+        ],
         axis=1,
     )
     df["Aspect"] = df["Aspect"].replace(
@@ -149,6 +155,19 @@ def extract(local_path, go_codes) -> pd.DataFrame:
     )
     df["Evidence"] = df["Evidence"].replace(GOA_EVIDENCE)
     df["Date"] = pd.to_datetime(df["Date"], format=r"%Y%m%d")
-    df = df.rename({'DB_Object_ID': "GOA DB object ID", 'Qualifiers': "GOA qualifiers", 'GO Identifier': "GOA GO code", 'DB:Reference': "GOA DB reference",
-       'Evidence': "GOA evidence", 'With': "GOA additional evidence", 'Aspect': "GOA aspect", 'Taxon_ID': "GOA taxon ID", 'Date': "GOA annotation date", 'Assigned_By': "GOA assigned by"}, axis=1)
+    df = df.rename(
+        {
+            "DB_Object_ID": "GOA DB object ID",
+            "Qualifiers": "GOA qualifiers",
+            "GO Identifier": "GOA GO code",
+            "DB:Reference": "GOA DB reference",
+            "Evidence": "GOA evidence",
+            "With": "GOA additional evidence",
+            "Aspect": "GOA aspect",
+            "Taxon_ID": "GOA taxon ID",
+            "Date": "GOA annotation date",
+            "Assigned_By": "GOA assigned by",
+        },
+        axis=1,
+    )
     return df

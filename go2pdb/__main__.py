@@ -27,7 +27,12 @@ def build_parser() -> argparse.ArgumentParser:
         "Find PDB entries with GO annotations and keywords.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
-    parser.add_argument("--broken-ssl", help="Use this flag if your IT department installs a self-signed certificate on the firewall without telling anyone.", action="store_false", dest="working_ssl")
+    parser.add_argument(
+        "--broken-ssl",
+        help="Use this flag if your IT department installs a self-signed certificate on the firewall without telling anyone.",
+        action="store_false",
+        dest="working_ssl",
+    )
     parser.add_argument(
         "--log-level",
         help="Output verbosity",
@@ -35,7 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="INFO",
     )
     subparsers = parser.add_subparsers(description="sub-command help")
-    search_parser = subparsers.add_parser("search", help="Search for PDB entries.", formatter_class=argparse.ArgumentDefaultsHelpFormatter,)
+    search_parser = subparsers.add_parser(
+        "search",
+        help="Search for PDB entries.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     search_parser.add_argument("--do-search", help=argparse.SUPPRESS)
     search_parser.add_argument(
         "--search-goa",
@@ -62,7 +71,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="GO codes to search (e.g., GO:0090729 or GO:0031640). Search terms are combined with logical OR operation.",
         nargs="+",
     )
-    fetch_parser = subparsers.add_parser("fetch", help="Fetch information about PDB entries.", formatter_class=argparse.ArgumentDefaultsHelpFormatter,)
+    fetch_parser = subparsers.add_parser(
+        "fetch",
+        help="Fetch information about PDB entries.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     fetch_parser.add_argument("--do-fetch", help=argparse.SUPPRESS)
     fetch_parser.add_argument(
         "--input-path",
@@ -76,7 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
         dest="fetch_output_path",
         default=FETCH_OUTPUT,
     )
-    blast_parser = subparsers.add_parser("blast", help="Perform all-vs-all sequence alignments.", formatter_class=argparse.ArgumentDefaultsHelpFormatter,)
+    blast_parser = subparsers.add_parser(
+        "blast",
+        help="Perform all-vs-all sequence alignments.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     blast_parser.add_argument("--do-blast", help=argparse.SUPPRESS)
     blast_parser.add_argument(
         "--input-path",
@@ -95,7 +112,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Save raw BLAST XML-format to this path, if specified.",
         nargs=1,
     )
-    cluster_parser = subparsers.add_parser("cluster", help="Cluster BLAST results.", formatter_class=argparse.ArgumentDefaultsHelpFormatter,)
+    cluster_parser = subparsers.add_parser(
+        "cluster",
+        help="Cluster BLAST results.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     cluster_parser.add_argument("--do-cluster", help=argparse.SUPPRESS)
     cluster_parser.add_argument(
         "--identity-cutoff",
@@ -127,12 +148,16 @@ def search(args):
     uniprot_df = uniprot.search_go(args.go_codes, ssl_verify=args.working_ssl)
     _LOGGER.info(f"Found {len(uniprot_df)} UniProt IDs.")
     _LOGGER.info("Searching for PDB IDs matching UniProt IDs.")
-    pdb_mapping_df = uniprot.get_pdb_ids(uniprot_df["UniProt entry ID"].values, ssl_verify=args.working_ssl)
+    pdb_mapping_df = uniprot.get_pdb_ids(
+        uniprot_df["UniProt entry ID"].values, ssl_verify=args.working_ssl
+    )
     _LOGGER.info(f"Found {len(pdb_mapping_df)} PDB IDs.")
     df = uniprot_df.merge(pdb_mapping_df, how="right", on="UniProt entry ID")
     if args.pdb_keyword:
         _LOGGER.info(f"Searching PDB for keyword {args.pdb_keyword}.")
-        pdb_df = pdb.keyword_search(args.pdb_keyword, ssl_verify=args.working_ssl)
+        pdb_df = pdb.keyword_search(
+            args.pdb_keyword, ssl_verify=args.working_ssl
+        )
         _LOGGER.info(f"Found {len(pdb_df)} PDB IDs.")
         df = df.merge(pdb_df, how="outer", on="PDB ID")
         _LOGGER.info(f"Have {len(df)} entries.")
@@ -150,7 +175,27 @@ def search(args):
     _LOGGER.info("Adding PDB metadata.")
     meta_df = pdb.metadata(pdb_ids, ssl_verify=args.working_ssl)
     df = df.merge(meta_df, how="left", on="PDB ID")
-    df = df[["PDB ID", "PDB description", "PDB title", "PDB keyword", "GOA qualifiers", 'GOA GO code', 'GOA DB reference', 'GOA evidence', 'GOA additional evidence', 'GOA taxon ID', 'GOA annotation date', 'GOA assigned by', "PDB chain ID", "PDB strand ID(s)", "PDB strand UniProt", "PDB strand type", "PDB strand sequence"]]
+    df = df[
+        [
+            "PDB ID",
+            "PDB description",
+            "PDB title",
+            "PDB keyword",
+            "GOA qualifiers",
+            "GOA GO code",
+            "GOA DB reference",
+            "GOA evidence",
+            "GOA additional evidence",
+            "GOA taxon ID",
+            "GOA annotation date",
+            "GOA assigned by",
+            "PDB chain ID",
+            "PDB strand ID(s)",
+            "PDB strand UniProt",
+            "PDB strand type",
+            "PDB strand sequence",
+        ]
+    ]
     _LOGGER.info(f"Have {len(df)} entries.")
     _LOGGER.info(f"Writing results to {args.search_output_path}.")
     df.to_excel(args.search_output_path, index=False)

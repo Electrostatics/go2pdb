@@ -23,7 +23,14 @@ def search_id(uniprot_ids, ssl_verify) -> pd.DataFrame:
         req = requests.get(search_url, verify=ssl_verify)
         lines = req.text.splitlines()
         rows += [line.split("\t") for line in lines[1:]]
-    df = pd.DataFrame(data=rows, columns=["UniProt entry ID", "UniProt entry name", "UniProt protein names"])
+    df = pd.DataFrame(
+        data=rows,
+        columns=[
+            "UniProt entry ID",
+            "UniProt entry name",
+            "UniProt protein names",
+        ],
+    )
     return df.drop_duplicates(ignore_index=True)
 
 
@@ -41,7 +48,15 @@ def search_go(go_codes, ssl_verify) -> pd.DataFrame:
         req = requests.get(search_url, verify=ssl_verify)
         lines = req.text.splitlines()
         rows += [line.split("\t") + [go_code] for line in lines[1:]]
-    df = pd.DataFrame(data=rows, columns=["UniProt entry ID", "UniProt entry name", "UniProt protein names", "UniProt GO code"])
+    df = pd.DataFrame(
+        data=rows,
+        columns=[
+            "UniProt entry ID",
+            "UniProt entry name",
+            "UniProt protein names",
+            "UniProt GO code",
+        ],
+    )
     return df.drop_duplicates(ignore_index=True)
 
 
@@ -56,7 +71,7 @@ def get_pdb_ids(uniprot_ids, ssl_verify) -> pd.DataFrame:
         "from": "ACC+ID",
         "to": "PDB_ID",
         "format": "tab",
-        "query": " ".join(uniprot_ids)
+        "query": " ".join(uniprot_ids),
     }
     req = requests.post(MAPPING_URL, data=params, verify=ssl_verify)
     lines = req.text.splitlines()
