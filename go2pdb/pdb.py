@@ -123,6 +123,8 @@ def metadata(pdb_ids, ssl_verify) -> pd.DataFrame:
                 strand_ids = entity.pop("pdbx_strand_id")
                 strand_type = entity.pop("rcsb_entity_polymer_type")
                 sequence = entity.pop("pdbx_seq_one_letter_code_can")
+                if not sequence.isalpha():
+                    sequence = None
                 uniprots = polymer.pop("uniprots")
                 if uniprots is not None:
                     if len(uniprots) > 1:
@@ -145,5 +147,6 @@ def metadata(pdb_ids, ssl_verify) -> pd.DataFrame:
                     "PDB strand sequence": sequence,
                     "PDB strand UniProt": uniprot,
                 }
-                rows.append(row)
+                if sequence is not None:
+                    rows.append(row)
     return pd.DataFrame(rows)
