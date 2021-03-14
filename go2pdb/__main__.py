@@ -13,7 +13,9 @@ from .go import goa
 
 _LOGGER = logging.getLogger(__name__)
 GO_IDS = []
-BLAST_CUTOFF = 0.9
+BLAST_SIMILARITY_CUTOFF = 0.8
+BLAST_IDENTITY_CUTOFF = 0.8
+CLUSTER_IDENTITY_CUTOFF = 0.9
 DATA_DIR = Path("data")
 GOA_PATH = DATA_DIR / Path("goa_pdb.gaf.gz")
 SEARCH_OUTPUT = Path("search-output.xlsx")
@@ -94,13 +96,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     blast_parser.add_argument(
         "--output-path",
-        help="Path for Excel-format blast output.",
+        help="Path for Excel-format BLAST output.",
         dest="blast_output_path",
         default=BLAST_OUTPUT,
     )
     blast_parser.add_argument(
         "--fasta-path",
-        help="Save FASTA file to this path (rather than a temporary file)."
+        help="Save FASTA file to this path (rather than a temporary file).",
     )
     blast_parser.add_argument(
         "--db-dir",
@@ -108,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Save BLAST database files to this directory (rather than a "
             " temporary directory)."
         ),
-        dest="blast_db_dir"
+        dest="blast_db_dir",
     )
     blast_parser.add_argument(
         "--raw-output",
@@ -116,18 +118,36 @@ def build_parser() -> argparse.ArgumentParser:
         dest="blast_raw_output",
         nargs=1,
     )
+    blast_parser.add_argument(
+        "--identity-cutoff",
+        help=(
+            "Cutoff for identity score (calculated via Jaccard index). "
+            "If either a hit identity or similarity exceeds these cutoffs, "
+            "then the hit is included in the results.  Set to zero to include "
+            "everything (but beware of file sizes...)."
+        ),
+        default=BLAST_IDENTITY_CUTOFF,
+        dest="blast_identity_cutoff",
+        type=float,
+    )
+    blast_parser.add_argument(
+        "--similarity-cutoff",
+        help=(
+            "Cutoff for similarity score (calculated via Jaccard index). "
+            "If either a hit identity or similarity exceeds these cutoffs, "
+            "then the hit is included in the results.  Set to zero to include "
+            "everything (but beware of file sizes...)."
+        ),
+        default=BLAST_SIMILARITY_CUTOFF,
+        dest="blast_similarity_cutoff",
+        type=float,
+    )
     cluster_parser = subparsers.add_parser(
         "cluster",
         help="Cluster BLAST results.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     cluster_parser.add_argument("--do-cluster", help=argparse.SUPPRESS)
-    cluster_parser.add_argument(
-        "--identity-cutoff",
-        help="Cutoff for identity score (calculated via Jaccard index).",
-        default=BLAST_CUTOFF,
-        type=float,
-    )
     cluster_parser.add_argument(
         "--input-path",
         help="Path to Excel-format BLAST output.",
@@ -165,10 +185,20 @@ def do_blast(args):
         blast_dir = Path(temp_dir.name)
     _LOGGER.info(f"Building BLAST database in {blast_dir}.")
     blast.build_db(fasta_path, blast_dir)
-    raise NotImplementedError(args.blast_db_dir)
-    raise NotImplementedError(args.blast_raw_output)
-    raise NotImplementedError(args.blast_output_path)
-    temp_dir.cleanup()
+    print(args)
+    if args.blast_raw_output is not None:
+        save_output = Path(args.blast_raw_output[0])
+    else:
+        save_output = None
+    df = blast.run_blast(
+        fasta_path,
+        blast_dir,
+        identity_cutoff=args.blast_identity_cutoff,
+        similarity_cutoff=args.blast_similarity_cutoff,
+        save_output=save_output,
+    )
+    _LOGGER.info(f"Saving BLAST results to {args.blast_output_path}.")
+    df.to_excel(Path(args.blast_output_path))
 
 
 def do_search(args):
