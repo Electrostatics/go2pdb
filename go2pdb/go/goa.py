@@ -6,6 +6,7 @@ from pathlib import Path
 from datetime import datetime, date
 import pandas as pd
 
+
 _LOGGER = logging.getLogger(__name__)
 NOW = datetime.now()
 FTP_SERVER = "ftp.ebi.ac.uk"
@@ -48,6 +49,9 @@ GOA_EVIDENCE = {
     "NR": "not recorded",
     "ND": "no biological data available",
     "RCA": "inferred from reviewed computational analysis",
+    "IBA": "inferred from biological aspect of ancestor",
+    "ISM": "inferred from sequence model",
+    "ISO": "inferred from sequence orthology",
 }
 
 
