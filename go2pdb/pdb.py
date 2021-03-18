@@ -68,7 +68,7 @@ def keyword_search(keyword, ssl_verify) -> pd.DataFrame:
                 pdb_id = result["identifier"].upper()
                 pdb_ids.add(pdb_id)
     df = pd.DataFrame(data=list(pdb_ids), columns=["PDB ID"])
-    df["PDB keyword"] = keyword
+    df["PDB keyword match"] = keyword
     return df
 
 
