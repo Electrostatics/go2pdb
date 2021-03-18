@@ -3,11 +3,12 @@ import tempfile
 from go2pdb.go import uniprot
 import logging
 import argparse
+import json
 from pathlib import Path
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 import pandas as pd
 import numpy as np
-from . import pdb, blast
+from . import pdb, blast, cluster
 from .go import goa
 
 
@@ -144,7 +145,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     cluster_parser = subparsers.add_parser(
         "cluster",
-        help="Cluster BLAST results.",
+        help="Cluster BLAST results based on sequence similarity or identity.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     cluster_parser.add_argument("--do-cluster", help=argparse.SUPPRESS)
@@ -159,6 +160,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Path for Excel-format cluster output.",
         default=CLUSTER_OUTPUT,
         dest="cluster_output_path",
+    )
+    cluster_parser.add_argument(
+        "--cluster-metric",
+        help="Metric to use for clustering",
+        default="identity",
+        choices=["identity", "similarity"],
+    )
+    cluster_parser.add_argument(
+        "--metric-cutoff",
+        help=(
+            "Cutoff for clustering metric. Only pairs with metrics above "
+            "this value will be included."
+        ),
+        default=CLUSTER_IDENTITY_CUTOFF,
+        dest="cluster_metric_cutoff",
     )
     return parser
 
@@ -237,15 +253,28 @@ def do_search(args):
     _LOGGER.info("Adding PDB metadata.")
     meta_df = pdb.metadata(pdb_ids, ssl_verify=args.working_ssl)
     df = df.merge(meta_df, how="left", on="PDB ID")
-    df = df[
-        [
-            "PDB ID",
-            "PDB description",
-            "PDB title",
-            "PDB keyword",
-            "PDB deposit date",
-            "PDB method",
-            "PDB resolution (A)",
+    column_list = [
+        "PDB ID",
+        "PDB description",
+        "PDB title",
+        "PDB deposit date",
+        "PDB method",
+        "PDB resolution (A)",
+        "PDB chain ID",
+        "PDB strand ID(s)",
+        "PDB strand type",
+        "PDB strand sequence",
+    ]
+    if args.pdb_keyword:
+        column_list += ["PDB keyword match"]
+    column_list += [
+        "UniProt entry ID",
+        "UniProt entry name",
+        "UniProt protein names",
+        "UniProt GO code",
+    ]
+    if args.search_goa:
+        column_list += [
             "GOA qualifiers",
             "GOA GO code",
             "GOA DB reference",
@@ -254,17 +283,38 @@ def do_search(args):
             "GOA taxon ID",
             "GOA annotation date",
             "GOA assigned by",
-            "PDB chain ID",
-            "PDB strand ID(s)",
-            "PDB strand UniProt",
-            "PDB strand type",
-            "PDB strand sequence",
         ]
-    ]
+    df = df[column_list]
     df = df.drop_duplicates()
     _LOGGER.info(f"Have {len(df)} entries.")
     _LOGGER.info(f"Writing results to {args.search_output_path}.")
     df.to_excel(args.search_output_path, index=False)
+
+
+def do_cluster(args):
+    """Perform clustering of BLAST results.
+
+    :param argparse.Namespace args:  command-line arguments
+    """
+    blast_path = Path(args.cluster_input_path)
+    _LOGGER.info(f"Clustering BLAST results from {blast_path}.")
+    df = pd.read_excel(blast_path)
+    _LOGGER.info(f"Read {len(df)} results.")
+    cutoff = args.cluster_metric_cutoff
+    if args.cluster_metric == "identity":
+        _LOGGER.info(f"Removing results with identity below {cutoff}.")
+        df = df[df["Alignment frac. identity"] >= cutoff]
+    elif args.cluster_metric == "similarity":
+        _LOGGER.info(f"Removing results with similarity below {cutoff}.")
+        df = df[df["Alignment frac. similarity"] >= cutoff]
+    else:
+        err = f"Unknown clustering metric: {args.cluster_metric}."
+        raise ValueError(err)
+    _LOGGER.info(f"Have {len(df)} results remaining.")
+    clusters = cluster.cluster(df)
+    cluster_df = cluster.transform_clusters(clusters)
+    _LOGGER.info(f"Writing cluster information to {args.cluster_output_path}.")
+    cluster_df.to_excel(args.cluster_output_path, index=False)
 
 
 def main(args=None):
@@ -284,7 +334,7 @@ def main(args=None):
     elif hasattr(args, "do_blast"):
         do_blast(args)
     elif hasattr(args, "do_cluster"):
-        raise NotImplementedError("cluster")
+        do_cluster(args)
     else:
         _LOGGER.error("No command specified.")
         parser.print_help()
