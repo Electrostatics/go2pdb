@@ -38,36 +38,19 @@ def build_fasta(search_df) -> str:
     :returns:  string with FASTA data
     """
     fasta = ""
-    search_df = search_df[
-        [
-            "PDB ID",
-            "PDB chain ID",
-            "PDB description",
-            "PDB strand UniProt",
-            "PDB strand sequence",
-            "PDB strand ID(s)",
-        ]
-    ]
+    search_df = search_df[["PDB chain ID", "PDB strand sequence",]]
     search_df = search_df.drop_duplicates()
     for _, row in search_df.iterrows():
-        pdb_id = row["PDB ID"]
         chain_id = row["PDB chain ID"]
-        description = row["PDB description"]
-        uniprot = row["PDB strand UniProt"]
         sequence = row["PDB strand sequence"]
-        strand_id = str(row["PDB strand ID(s)"])
-        if "," in strand_id:
-            strand_id = f"Chains {strand_id}"
-        else:
-            strand_id = f"Chain {strand_id}"
-        description = f"{chain_id}|{strand_id}|{description}|{uniprot}"
+        description = f"{chain_id}"
         _LOGGER.debug(f"Processing {description}...")
         try:
             seq = Seq(sequence)
         except TypeError:
             _LOGGER.warning(
                 f"Failed to parse sequence {sequence} for {description} from "
-                f"{pdb_id}. This often happens when entries are withdrawn "
+                f"{chain_id}. This often happens when entries are withdrawn "
                 f"from the PDB."
             )
             seq = None
@@ -150,12 +133,13 @@ def process_blast(
     rows = []
     with open(Path(blast_dir) / Path("output.xml")) as blast_file:
         for record in NCBIXML.parse(blast_file):
-            query_id = record.query.split("|")
-            pdb_id, chain_num = query_id[0].split("_")
-            query_id = f"{pdb_id}_{chain_num}"
+            query_id = record.query.split()[0]
             query_length = record.query_length
             for alignment in record.alignments:
-                align_id = alignment.title
+                words = alignment.title.split("|")
+                pdb_id = words[1]
+                chain_id = words[2].split()[0]
+                align_id = f"{pdb_id}_{chain_id}"
                 if len(alignment.hsps) > 1:
                     _LOGGER.warning(
                         f"Ignoring extra alignments for {query_id}."
@@ -179,14 +163,12 @@ def process_blast(
                         "Alignment identities": hsp.identities,
                         "Alignment positives": hsp.positives,
                         "Alignment gaps": hsp.gaps,
-                        "Alignment pct. identity": identity,
-                        "Alignment pct. similarity": similarity,
+                        "Alignment frac. identity": identity,
+                        "Alignment frac. similarity": similarity,
                     }
                     rows.append(row)
     df = pd.DataFrame(rows)
-    split_df = df["Hit ID"].str.split("|", expand=True)
-    df["Hit ID"] = split_df[1] + "_" + split_df[2]
-    df = df[df["Query ID"] != df["Hit ID"]]
+    df = df[df["Source"] != df["Target"]]
     df = df.reset_index(drop=True)
     return df
 
