@@ -2,17 +2,23 @@
 import setuptools
 
 
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
+
 setuptools.setup(
     name="go2pdb",
-    version="0.0.1",
+    version="1.0.0",
     description=(
-        "This code downloads and analyzes Protein Data Bank entries with specific GO annotations."
+        "This code identifies Protein Data Bank (PDB) entries with specific "
+        "Gene Ontology (GO) annotations."
     ),
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     python_requires=">=3.8",
     author="Nathan Baker",
-    author_email="nathan.baker@pnnl.gov",
+    author_email="nathanandrewbaker@gmail.com",
     packages=setuptools.find_packages(),
-    # package_data={"": ["./config.ini"]},
     install_requires=[
         "requests",
         "biopython",
@@ -24,15 +30,14 @@ setuptools.setup(
     tests_require=["pytest"],
     entry_points={"console_scripts": ["go2pdb=go2pdb.__main__:main"]},
     keywords="science chemistry biophysics biochemistry",
+    url="https://github.com/Electrostatics/go2pdb",
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Environment :: Console",
         "Intended Audience :: Science/Research",
-        "License :: OSI Approved :: Common Public License",
+        "License :: OSI Approved :: BSD License",
         "Natural Language :: English",
-        "Operating System :: MacOS",
-        "Operating System :: Microsoft :: Windows",
-        "Operating System :: POSIX",
+        "Operating System :: OS Independent",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
