@@ -1,7 +1,7 @@
 # Retrieve PDB entries annotated with specific GO codes
 
 This code retrieves [Protein DataBank](https://www.rcsb.org/) protein structure entries for proteins that have been annotated in [UniProt](https://www.uniprot.org/) with specific [Gene Ontology](http://geneontology.org/) codes.
-This is useful for performing structural bioinformatics analysess (e.g., electrostatics comparisons, etc.) across proteins with similar functions.
+This is useful for performing structural bioinformatics analyses (e.g., electrostatics comparisons, etc.) across proteins with similar functions.
 
 This code also uses the [Gene Ontology Annotation database](https://www.ebi.ac.uk/GOA/) for enhanced annotation beyond what can be queried from UniProt.
 This index is updated approximately every 4 weeks and can be [downloaded via FTP](ftp://ftp.ebi.ac.uk/pub/databases/GO/goa/PDB/).
@@ -25,7 +25,7 @@ The code assumes that you have the docker program available in your path (i.e., 
 More information about the code use can be obtained by running
 
 ```bash
-python -m go2pdb --help
+go2pdb --help
 ```
 
 ## Example use
@@ -34,8 +34,8 @@ For more information about any of the commands below, using the `--help` option.
 For example:
 
 ```bash
-python -m go2pdb --help
-python -m go2pdb search --help
+go2pdb --help
+go2pdb search --help
 ```
 
 ### Finding structures with specific functions
@@ -45,7 +45,7 @@ We will define this set of proteins as those gene products that have the Gene On
 However, if we're not completely sure that this GO code covers all relevant proteins, we can also add a PDB keyword search (e.g., for "nickel").
 
 ```bash
-python -m go2pdb search --pdb-keyword NICKEL --search-goa GO:0016151
+go2pdb search --pdb-keyword NICKEL --search-goa GO:0016151
 ```
 
 The `--search-goa` option adds search results from GOA.
@@ -63,7 +63,7 @@ Sequence alignment is performed using the [BLAST Docker container](https://hub.d
 The first step is to run BLAST on the existing sequences:
 
 ```bash
-python -m go2pdb blast
+go2pdb blast
 ```
 
 This command consumes the `search-output.xlsx` file from the search step and produces a `blast-output.xlsx` file with pairwise matches between sequences.
@@ -75,7 +75,7 @@ The ``blast-output.xlsx` file can be used with graph visualization tools for qua
 Running
 
 ```bash
-python -m go2pdb cluster
+go2pdb cluster
 ```
 
 will cluster sequences based on sequence identity.
@@ -86,7 +86,7 @@ The sequence-based clusters are named by a representative protein in each cluste
 The cluster information can be merged with the search results by running
 
 ```bash
-python -m go2pdb summarize
+go2pdb summarize
 ```
 
 which will produce a joined table in `summary-output.xlsx`.

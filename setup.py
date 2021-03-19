@@ -22,7 +22,7 @@ setuptools.setup(
         "mmcif_pdbx",
     ],
     tests_require=["pytest"],
-    # entry_points={"console_scripts": ["mvalue=osmolytes.main:console"]},
+    entry_points={"console_scripts": ["go2pdb=go2pdb.__main__:main"]},
     keywords="science chemistry biophysics biochemistry",
     classifiers=[
         "Development Status :: 3 - Alpha",
