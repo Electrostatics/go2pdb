@@ -22,6 +22,7 @@ GOA_PATH = DATA_DIR / Path("goa_pdb.gaf.gz")
 SEARCH_OUTPUT = Path("search-output.xlsx")
 BLAST_OUTPUT = Path("blast-output.xlsx")
 CLUSTER_OUTPUT = Path("cluster-output.xlsx")
+SUMMARY_OUTPUT = Path("summary-output.xlsx")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -176,6 +177,30 @@ def build_parser() -> argparse.ArgumentParser:
         default=CLUSTER_IDENTITY_CUTOFF,
         dest="cluster_metric_cutoff",
     )
+    summarize_parser = subparsers.add_parser(
+        "summarize",
+        help="Enrich clustering results with information from previous steps.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
+    summarize_parser.add_argument("--do-summarize", help=argparse.SUPPRESS)
+    summarize_parser.add_argument(
+        "--cluster-input",
+        help="Path for Excel-format cluster input",
+        dest="summarize_cluster_input",
+        default=CLUSTER_OUTPUT,
+    )
+    summarize_parser.add_argument(
+        "--search-input",
+        help="Path for Excel-format search input",
+        dest="summarize_search_input",
+        default=SEARCH_OUTPUT,
+    )
+    summarize_parser.add_argument(
+        "--summary-output",
+        help="Path for Excel-format summary output",
+        dest="summarize_output",
+        default=SUMMARY_OUTPUT,
+    )
     return parser
 
 
@@ -260,14 +285,14 @@ def do_search(args):
         "PDB deposit date",
         "PDB method",
         "PDB resolution (A)",
-        "PDB chain ID",
-        "PDB strand ID(s)",
-        "PDB strand type",
-        "PDB strand sequence",
     ]
     if args.pdb_keyword:
         column_list += ["PDB keyword match"]
     column_list += [
+        "PDB chain ID",
+        "PDB strand ID(s)",
+        "PDB strand type",
+        "PDB strand sequence",
         "UniProt entry ID",
         "UniProt entry name",
         "UniProt protein names",
@@ -317,6 +342,34 @@ def do_cluster(args):
     cluster_df.to_excel(args.cluster_output_path, index=False)
 
 
+def do_summarize(args):
+    """Perform summary/join of clustering and search results.
+
+    :param argparse.Namespace args:  command-line arguments
+    """
+    _LOGGER.info(f"Reading cluster input from {args.summarize_cluster_input}.")
+    cluster_df = pd.read_excel(args.summarize_cluster_input)
+    _LOGGER.info(f"Reading search input from {args.summarize_search_input}.")
+    search_df = pd.read_excel(args.summarize_search_input)
+    cluster_df = cluster_df.merge(
+        search_df, how="left", left_on="Cluster", right_on="PDB chain ID"
+    )
+    cluster_df = cluster_df[["Cluster", "Chain", "PDB description"]]
+    cluster_df = cluster_df.rename(
+        {
+            "PDB description": "Cluster description",
+            "Cluster": "Cluster representative",
+        },
+        axis=1,
+    )
+    df = search_df.merge(
+        cluster_df, how="left", left_on="PDB chain ID", right_on="Chain"
+    )
+    df = df.drop(["Chain"], axis=1)
+    _LOGGER.info(f"Writing summary output to {args.summarize_output}.")
+    df.to_excel(args.summarize_output, index=False)
+
+
 def main(args=None):
     """Main driver.
 
@@ -335,6 +388,8 @@ def main(args=None):
         do_blast(args)
     elif hasattr(args, "do_cluster"):
         do_cluster(args)
+    elif hasattr(args, "do_summarize"):
+        do_summarize(args)
     else:
         _LOGGER.error("No command specified.")
         parser.print_help()

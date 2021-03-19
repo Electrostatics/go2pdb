@@ -7,6 +7,10 @@ This code also uses the [Gene Ontology Annotation database](https://www.ebi.ac.u
 This index is updated approximately every 4 weeks and can be [downloaded via FTP](ftp://ftp.ebi.ac.uk/pub/databases/GO/goa/PDB/).
 However, the database appears to have holes in it, so this code also searches UniProt for entries with matching GO codes that also have PDB structures.
 
+## Support
+
+This software is supported by the National Institutes of Health (grant GM069702).
+
 ## Installation and dependencies
 
 After creating and activating a virtual environment (e.g., with [conda](https://docs.conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html) or [virtualenv](https://virtualenv.pypa.io/en/latest/)), you can install the code and most of its dependencies by running
@@ -65,3 +69,40 @@ python -m go2pdb blast
 This command consumes the `search-output.xlsx` file from the search step and produces a `blast-output.xlsx` file with pairwise matches between sequences.
 Note that the results are filtered based on similarity and identity cutoffs; run with the `--help` option for more information.
 The ``blast-output.xlsx` file can be used with graph visualization tools for qualitative insight into the relationships between PDB entries.
+
+### Clustering and summarizing results
+
+Running
+
+```bash
+python -m go2pdb cluster
+```
+
+will cluster sequences based on sequence identity.
+The metric used for clustering can be changed with the `--cluster-metric` option and the cutoff for clustering can be changed with the `--metric-cutoff` option.
+This clustering step will produce a simple table in `cluster-output.xlsx` that associates PDB chains with sequence-based clusters.
+The sequence-based clusters are named by a representative protein in each cluster.
+
+The cluster information can be merged with the search results by running
+
+```bash
+python -m go2pdb summarize
+```
+
+which will produce a joined table in `summary-output.xlsx`.
+
+The default behavior for both of these commands can be modified with options described in the `--help` option output.
+
+The spreadsheet output contains the following columns:
+
+Columns | Description
+------- | -----------
+PDB ID, PDB description, PDB title | Basic information about the structure from the Protein Data Bank (PDB)
+PDB deposit date | The date the structure was added to the PDB (sort by this for the newest structures)
+PDB method, PDB resolution (A) | Information about the experimental method for determining the structure; sort by resolution for the highest-refined structures
+PDB chain ID, PDB strand ID(s), PDB strand type, PDB strand sequence | Information about a specific strand (subunit) of the protein.  This is the sequence used for BLAST comparisons between proteins.
+PDB keyword match | If a PDB keyword search was performed, this gives the matching keyword (e.g., "NICKEL") used for the search.  When this is blank, it means that "NICKEL" did not occur in the PDB keywords for this structure.
+UniProt entry ID, UniProt entry name, UniProt protein names | Description of the UniProt entry for this strand.  Often the UniProt description is more informative than the PDB description and the UniProt online entry contains links to many useful tools for analyzing the sequence.  When these fields are blank, it means the structure was not identified from a GO code match (i.e., was found from a PDB keyword search instead).
+UniProt GO code | Matching GO code from search.
+GOA qualifiers, GOA GO code, GOA DB reference, GOA evidence, GOA additional evidence, GOA taxon ID, GOA annotation date, GOA assigned by | If a search of the Gene Ontology Annotation (GOA) database was performed, this provides additional information about how the GO assignment was made.  The GOA database appears to be incomplete so blank entries should not be interpreted as lack of evidence for the GO annotation.
+Cluster representative, Cluster description | These are the clusters assigned to each strand based on BLAST sequence identity with a 90% identity threshold.  Sorting by this column is useful for focusing on a specific type of protein.
