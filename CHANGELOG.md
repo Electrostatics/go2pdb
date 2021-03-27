@@ -2,4 +2,8 @@
 
 ## 0.0.1
 
-Initial release
+* Add copyright
+
+## 0.0.1
+
+* Initial release
