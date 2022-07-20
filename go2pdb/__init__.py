@@ -5,4 +5,4 @@ from pathlib import Path
 from configparser import ConfigParser, ExtendedInterpolation
 
 
-__version__ = metadata.version("go_pdb")
+__version__ = metadata.version("go2pdb")
